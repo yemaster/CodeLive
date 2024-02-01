@@ -1,6 +1,6 @@
 <script setup>
 // Naive-ui components
-import { NButton, NSplit, NTabs, NTabPane, NPopover, NH2, NDivider, NCard, NRadioGroup, NRadio, NScrollbar, NList, NListItem, NInput, NIcon } from 'naive-ui'
+import { NButton, NSplit, NTabs, NTabPane, NPopover, NAvatar, NDivider, NCard, NRadioGroup, NRadio, NScrollbar, NList, NListItem, NInput, NIcon } from 'naive-ui'
 import { MenuSharp } from '@vicons/ionicons5'
 
 // monaco-editor units
@@ -276,20 +276,23 @@ const roomInfo = ref({
     code: "",
 })
 
-// Message Queue
-const messages = ref([])
-const chatMessage = ref("")
-
 // Socket.io
 import { io } from "socket.io-client"
 
 const connected = ref(false)
 let socket
 
+// Message Queue
+const messages = ref([])
+const messageBox = ref()
+const chatMessage = ref("")
+const memberMap = {}
+
 onMounted(() => {
     socket = io("http://127.0.0.1:3000")
     socket.on("connect", () => {
         connected.value = true
+        userInfo.value.id = socket.id
         socket.emit("update_room", roomId.value, userInfo.value)
     })
     socket.on("disconnect", () => {
@@ -298,17 +301,21 @@ onMounted(() => {
     // Initialize room info
     socket.on("init-room", data => {
         roomInfo.value = data
+        for (let i of roomInfo.value.members)
+            memberMap[i.id] = i
     })
     // Room member info update
     socket.on("update-member", data => {
         let pid = -1
-        console.log(data, roomInfo.value.members)
+        //console.log(data, roomInfo.value.members)
+        memberMap[data.id] = data
         for (let i = 0; i < roomInfo.value.members.length; ++i)
             if (roomInfo.value.members[i].id === data.id) {
                 pid = i
                 break
             }
         if (pid === -1) {
+            messages.value.push({ t: 's', c: `${data.username}进入了房间` })
             roomInfo.value.members.push(data)
         }
         else {
@@ -318,11 +325,31 @@ onMounted(() => {
     })
     // Room member leave
     socket.on("leave-member", data => {
+        const u = memberMap[data].username
+        messages.value.push({ t: 's', c: `${u}退出了房间` })
+        delete memberMap[data]
         roomInfo.value.members = roomInfo.value.members.filter(v => v.id !== data)
+    })
+
+    // Chat Message
+    socket.on("chat", (d) => {
+        d.t = "m"
+        d.u = memberMap[d.i].username
+        messages.value.push(d)
     })
 })
 
+function sendMessage() {
+    socket.emit("chat", chatMessage.value)
+    chatMessage.value = ""
+}
+
+watch(() => messages.value.length, () => {
+    messageBox.value.scrollTo({ top: 2100000 })
+})
+
 onBeforeUnmount(() => {
+    // Disconnect socket before unmounted
     socket.disconnect()
 })
 </script>
@@ -365,9 +392,38 @@ onBeforeUnmount(() => {
             pane-style="position: relative; padding: 0; height: 100%;">
             <n-tab-pane display-directive="show" name="chat" tab="聊天">
                 <div style="height: 100%">
-                    <n-scrollbar style="height: calc(100% - 34px);" :x-scrollable="true">
+                    <n-scrollbar style="height:calc(100% - 34px);width: 100%;padding: 12px 20px;box-sizing: border-box;"
+                        :x-scrollable="true" ref="messageBox">
+                        <template v-for="m in messages">
+                            <div v-if="m.t === 's'" class="v-message-system">
+                                {{ m.c }}
+                            </div>
+                            <div v-else-if="m.i === userInfo.id" class="v-message me">
+                                <div class="left">
+                                    <div class="v-message-info">{{ m.u }}</div>
+                                    <div class="v-message-content">{{ m.c }}</div>
+                                </div>
+                                <div class="v-message-avatar">
+                                    <n-avatar round>
+                                        {{ userInfo.username[0] }}
+                                    </n-avatar>
+                                </div>
+                            </div>
+                            <div v-else class="v-message">
+                                <div class="v-message-avatar">
+                                    <n-avatar round>
+                                        {{ m.u[0] }}
+                                    </n-avatar>
+                                </div>
+                                <div class="right">
+                                    <div class="v-message-info">{{ m.u }}</div>
+                                    <div class="v-message-content">{{ m.c }}</div>
+                                </div>
+                            </div>
+                        </template>
                     </n-scrollbar>
-                    <n-input class="v-chatter" v-model:value="chatMessage" placeholder="输入以聊天" />
+                    <n-input class="v-chatter" v-model:value="chatMessage" placeholder="输入以聊天"
+                        @keyup.enter="sendMessage"></n-input>
                 </div>
             </n-tab-pane>
             <n-tab-pane display-directive="show" name="info" tab="信息">
@@ -399,7 +455,7 @@ onBeforeUnmount(() => {
                         个人信息
                     </n-divider>
                     <n-card title="Socket ID" size="small">
-
+                        {{ userInfo.id }}
                     </n-card>
                 </n-scrollbar>
             </n-tab-pane>

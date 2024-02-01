@@ -104,5 +104,10 @@ app.listen({ port, host }, (err, add) => {
             app.io.to(`Room-${joinedRoom}`).emit("leave-member", socket.id)
             //console.log(`${socket.id} disconnected`)
         })
+
+        socket.on('chat', (m) => {
+            const joinedRoom = playerRoom[socket.id]
+            app.io.to(`Room-${joinedRoom}`).emit("chat", { i: socket.id, c: m })
+        })
     })
 })

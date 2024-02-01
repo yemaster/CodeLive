@@ -45,3 +45,48 @@ body {
     resize: none;
     outline: none;
 }
+
+.n-divider {
+    margin: 0 6px !important;
+}
+
+.v-message-system {
+    margin-bottom: 10px;
+    padding: 2px 4px;
+    border-radius: 3px;
+    font-size: smaller;
+    text-align: center;
+    background-color: #dedede;
+    color: #fff;
+    width: auto;
+}
+
+.v-message {
+    display: flex;
+    margin-bottom: 10px;
+}
+
+.v-message.me {
+    text-align: right;
+    justify-content: flex-end;
+}
+
+.v-message .right {
+    margin-left: 10px;
+}
+
+.v-message .v-message-content {
+    padding: 5px 12px;
+    box-sizing: border-box;
+    background-color: #eaeaea;
+    border-radius: 5px;
+}
+
+.v-message.me .v-message-content {
+    background-color: #1780db;
+    color: #fff;
+}
+
+.v-message .left {
+    margin-right: 10px;
+}
