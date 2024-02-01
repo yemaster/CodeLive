@@ -1,6 +1,6 @@
 <script setup>
 // Naive-ui components
-import { NButton, NSplit, NTabs, NTabPane, NPopover, NAvatar, NDivider, NCard, NRadioGroup, NRadio, NScrollbar, NList, NListItem, NInput, NIcon } from 'naive-ui'
+import { NButton, NSplit, NTabs, NTabPane, NPopover, NAvatar, NDivider, NCard, NRadioGroup, NRadio, NScrollbar, NList, NListItem, NInput, NIcon, NSelect, useMessage } from 'naive-ui'
 import { MenuSharp } from '@vicons/ionicons5'
 
 // monaco-editor units
@@ -17,7 +17,15 @@ import { useRoute } from 'vue-router'
 const resultShow = ref()
 
 // code Content
-let codeContent = ref("<!DOCTYPE html><html><body style='margin:0'><p style='position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:42px;font-weight:300'>U5TC CodeLive</p></body></html>")
+let codeContent = ref(`<!DOCTYPE html>
+<html>
+
+<body style='margin:0'>
+    <p style='position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:42px;font-weight:300'>U5TC
+        CodeLive</p>
+</body>
+
+</html>`)
 
 // monaco-editor set
 self.MonacoEnvironment = {
@@ -30,7 +38,6 @@ self.MonacoEnvironment = {
 }
 
 let editor
-
 
 function updateIframe() {
     codeContent.value = editor.getValue();
@@ -48,175 +55,20 @@ function updateIframe() {
         ifrw.document.close()
     }
 }
+
+// Editor Themes
+//import { tomorrow, tomorrowNight, textmate } from "@/assets/editor-themes"
+const nowTheme = ref("vs")
+//const editorThemes = ref([{ label: "tomorrow", value: "tomorrow", v: tomorrow },
+//{ label: "tomorrow-night", value: "tomorrow-night", v: tomorrowNight },
+//{ label: "Textmate", value: "textmate", v: textmate }])
+const editorThemes = ref([{ label: "vs", value: "vs" }, { label: "vs-dark", value: "vs-dark" }])
+
 const editorInit = () => {
     nextTick(() => {
-        monaco.editor.defineTheme('tomorrow', {
-            "base": "vs",
-            "inherit": true,
-            "rules": [
-                {
-                    "foreground": "8e908c",
-                    "token": "comment"
-                },
-                {
-                    "foreground": "666969",
-                    "token": "keyword.operator.class"
-                },
-                {
-                    "foreground": "666969",
-                    "token": "constant.other"
-                },
-                {
-                    "foreground": "666969",
-                    "token": "source.php.embedded.line"
-                },
-                {
-                    "foreground": "c82829",
-                    "token": "variable"
-                },
-                {
-                    "foreground": "c82829",
-                    "token": "support.other.variable"
-                },
-                {
-                    "foreground": "c82829",
-                    "token": "string.other.link"
-                },
-                {
-                    "foreground": "c82829",
-                    "token": "string.regexp"
-                },
-                {
-                    "foreground": "c82829",
-                    "token": "entity.name.tag"
-                },
-                {
-                    "foreground": "c82829",
-                    "token": "entity.other.attribute-name"
-                },
-                {
-                    "foreground": "c82829",
-                    "token": "meta.tag"
-                },
-                {
-                    "foreground": "c82829",
-                    "token": "declaration.tag"
-                },
-                {
-                    "foreground": "f5871f",
-                    "token": "constant.numeric"
-                },
-                {
-                    "foreground": "f5871f",
-                    "token": "constant.language"
-                },
-                {
-                    "foreground": "f5871f",
-                    "token": "support.constant"
-                },
-                {
-                    "foreground": "f5871f",
-                    "token": "constant.character"
-                },
-                {
-                    "foreground": "f5871f",
-                    "token": "variable.parameter"
-                },
-                {
-                    "foreground": "f5871f",
-                    "token": "punctuation.section.embedded"
-                },
-                {
-                    "foreground": "f5871f",
-                    "token": "keyword.other.unit"
-                },
-                {
-                    "foreground": "c99e00",
-                    "token": "entity.name.class"
-                },
-                {
-                    "foreground": "c99e00",
-                    "token": "entity.name.type.class"
-                },
-                {
-                    "foreground": "c99e00",
-                    "token": "support.type"
-                },
-                {
-                    "foreground": "c99e00",
-                    "token": "support.class"
-                },
-                {
-                    "foreground": "718c00",
-                    "token": "string"
-                },
-                {
-                    "foreground": "718c00",
-                    "token": "constant.other.symbol"
-                },
-                {
-                    "foreground": "718c00",
-                    "token": "entity.other.inherited-class"
-                },
-                {
-                    "foreground": "718c00",
-                    "token": "markup.heading"
-                },
-                {
-                    "foreground": "3e999f",
-                    "token": "keyword.operator"
-                },
-                {
-                    "foreground": "3e999f",
-                    "token": "constant.other.color"
-                },
-                {
-                    "foreground": "4271ae",
-                    "token": "entity.name.function"
-                },
-                {
-                    "foreground": "4271ae",
-                    "token": "meta.function-call"
-                },
-                {
-                    "foreground": "4271ae",
-                    "token": "support.function"
-                },
-                {
-                    "foreground": "4271ae",
-                    "token": "keyword.other.special-method"
-                },
-                {
-                    "foreground": "4271ae",
-                    "token": "meta.block-level"
-                },
-                {
-                    "foreground": "8959a8",
-                    "token": "keyword"
-                },
-                {
-                    "foreground": "8959a8",
-                    "token": "storage"
-                },
-                {
-                    "foreground": "8959a8",
-                    "token": "storage.type"
-                },
-                {
-                    "foreground": "373b41",
-                    "background": "e0e0e0",
-                    "token": "meta.separator"
-                }
-            ],
-            "colors": {
-                "editor.foreground": "#4D4D4C",
-                "editor.background": "#FFFFFF",
-                "editor.selectionBackground": "#D6D6D6",
-                "editor.lineHighlightBackground": "#EFEFEF",
-                "editorCursor.foreground": "#AEAFAD",
-                "editorWhitespace.foreground": "#D1D1D1"
-            }
-        })
+        for (let i of editorThemes.value)
+            if (i.v)
+                monaco.editor.defineTheme(i.label, i.v)
         if (!editor) {
             editor = monaco.editor.create(document.getElementById('codeEditor'), {
                 value: codeContent.value,
@@ -225,14 +77,13 @@ const editorInit = () => {
                 automaticLayout: true,
                 readOnly: false,
                 fontSize: 16,
-                scrollBeyondLastLine: false,
             })
         }
         else {
             editor.setValue(codeContent.value)
             editor.updateOptions({
                 language: 'html',
-                theme: 'tomorrow',
+                theme: 'vs',
             })
         }
 
@@ -243,6 +94,12 @@ const editorInit = () => {
         updateIframe()
     })
 }
+
+watch(() => nowTheme.value, (v) => {
+    editor.updateOptions({
+        theme: v
+    })
+})
 
 editorInit()
 
@@ -283,6 +140,7 @@ const connected = ref(false)
 let socket
 
 // Message Queue
+const popMessage = useMessage()
 const messages = ref([])
 const messageBox = ref()
 const chatMessage = ref("")
@@ -340,6 +198,10 @@ onMounted(() => {
 })
 
 function sendMessage() {
+    if (chatMessage.value.length === 0) {
+        popMessage.error("消息内容不能为空")
+        return
+    }
     socket.emit("chat", chatMessage.value)
     chatMessage.value = ""
 }
@@ -422,8 +284,8 @@ onBeforeUnmount(() => {
                             </div>
                         </template>
                     </n-scrollbar>
-                    <n-input class="v-chatter" v-model:value="chatMessage" placeholder="输入以聊天"
-                        @keyup.enter="sendMessage"></n-input>
+                    <n-input class="v-chatter" v-model:value="chatMessage" placeholder="输入以聊天" @keyup.enter="sendMessage"
+                        :disabled="!connected"></n-input>
                 </div>
             </n-tab-pane>
             <n-tab-pane display-directive="show" name="info" tab="信息">
@@ -477,7 +339,7 @@ onBeforeUnmount(() => {
                             <n-radio label="纵向" value="vertical" />
                         </n-radio-group>
                     </n-card>
-                    <n-card title="右栏标签页位置" size="small">
+                    <n-card title="标签页位置" size="small">
                         <n-radio-group v-model:value="tabPosition">
                             <n-radio label="左侧" value="left" />
                             <n-radio label="上侧" value="top" />
@@ -487,6 +349,9 @@ onBeforeUnmount(() => {
                     <n-divider title-placement="left">
                         编辑器设置
                     </n-divider>
+                    <n-card title="编辑器主题" size="small">
+                        <n-select placeholder="选择语言" filterable v-model:value="nowTheme" :options="editorThemes"></n-select>
+                    </n-card>
                 </n-scrollbar>
             </n-tab-pane>
         </n-tabs>
