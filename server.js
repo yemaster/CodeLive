@@ -95,9 +95,34 @@ app.listen({ port, host }, (err, add) => {
             }
         })
 
+        socket.on("update-share", () => {
+            const rid = playerRoom[socket.id]
+            if (roomList[rid].share) {
+                socket.emit("notification", { t: "error", c: "已经有人在分享代码了" })
+                return
+            }
+            roomList[rid].share = socket.id
+            app.io.to(`Room-${rid}`).emit("update-share", socket.id)
+        })
+
+        socket.on("end-share", () => {
+            const rid = playerRoom[socket.id]
+            if (roomList[rid].share === socket.id) {
+                app.io.to(`Room-${rid}`).emit("update-share", null)
+                roomList[rid].share = null
+            }
+            else {
+                socket.emit("notification", { t: "error", c: "你并没有在分享代码" })
+            }
+        })
+
         socket.on('disconnect', () => {
             const joinedRoom = playerRoom[socket.id]
             roomList[joinedRoom].members = roomList[joinedRoom].members.filter((v) => v.id !== socket.id)
+            if (roomList[joinedRoom].share === socket.id) {
+                app.io.to(`Room-${joinedRoom}`).emit("update-share", null)
+                roomList[joinedRoom].share = null
+            }
             if (roomList[joinedRoom].members.length === 0)
                 delete roomList[joinedRoom]
             delete playerRoom[socket.id]

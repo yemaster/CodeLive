@@ -1,7 +1,8 @@
 <script setup>
+///// Variable Definition
 // Naive-ui components
 import { NButton, NSplit, NTabs, NTabPane, NPopover, NAvatar, NDivider, NCard, NRadioGroup, NRadio, NScrollbar, NList, NListItem, NInput, NIcon, NSelect, useMessage } from 'naive-ui'
-import { MenuSharp } from '@vicons/ionicons5'
+import { MenuSharp, CloseOutline } from '@vicons/ionicons5'
 
 // monaco-editor units
 import * as monaco from 'monaco-editor'
@@ -17,7 +18,7 @@ import { useRoute } from 'vue-router'
 const resultShow = ref()
 
 // code Content
-let codeContent = ref(`<!DOCTYPE html>
+const codeContent = ref(`<!DOCTYPE html>
 <html>
 
 <body style='margin:0'>
@@ -26,8 +27,59 @@ let codeContent = ref(`<!DOCTYPE html>
 </body>
 
 </html>`)
+const lastCodeVersion = ref(0)
+const lastSendCode = ref("")
 
-// monaco-editor set
+// Socket.io
+import { io } from "socket.io-client"
+
+const connected = ref(false)
+let socket
+
+// Monaco-Editor Instance
+let editor
+// Monaco-Editor Themes
+//import { tomorrow, tomorrowNight, textmate } from "@/assets/editor-themes"
+const nowTheme = ref("vs")
+//const editorThemes = ref([{ label: "tomorrow", value: "tomorrow", v: tomorrow },
+//{ label: "tomorrow-night", value: "tomorrow-night", v: tomorrowNight },
+//{ label: "Textmate", value: "textmate", v: textmate }])
+const editorThemes = ref([{ label: "vs", value: "vs" }, { label: "vs-dark", value: "vs-dark" }])
+
+// Editor Settings
+const settingsShow = ref(false)
+const combineDirection = ref("horizontal") // Code View Direction
+const tabPosition = ref("top")             // Tab Position
+const isDragging = ref(false)              // Is Dragging
+
+// pinia Store
+import { useStore } from '@/states'
+const store = useStore()
+// Read username from local
+if (localStorage && localStorage.u5tcname)
+    store.username = localStorage.u5tcname
+
+const route = useRoute()
+// Room info and user info
+const roomId = ref(route.params.id)
+const userInfo = ref({
+    username: store.username
+})
+const roomInfo = ref({
+    rid: route.params.id,
+    share: null,
+    members: [],
+    code: "",
+})
+
+// Message Queue
+const popMessage = useMessage()
+const messages = ref([])
+const messageBox = ref()
+const chatMessage = ref("")
+const memberMap = {}
+
+// monaco-editor worker getter
 self.MonacoEnvironment = {
     getWorker(_, label) {
         if (label === 'html' || label === 'handlebars' || label === 'razor') {
@@ -37,8 +89,7 @@ self.MonacoEnvironment = {
     },
 }
 
-let editor
-
+// Update Iframe value when code changes
 function updateIframe() {
     codeContent.value = editor.getValue();
     if (resultShow?.value) {
@@ -56,14 +107,7 @@ function updateIframe() {
     }
 }
 
-// Editor Themes
-//import { tomorrow, tomorrowNight, textmate } from "@/assets/editor-themes"
-const nowTheme = ref("vs")
-//const editorThemes = ref([{ label: "tomorrow", value: "tomorrow", v: tomorrow },
-//{ label: "tomorrow-night", value: "tomorrow-night", v: tomorrowNight },
-//{ label: "Textmate", value: "textmate", v: textmate }])
-const editorThemes = ref([{ label: "vs", value: "vs" }, { label: "vs-dark", value: "vs-dark" }])
-
+// Init editor
 const editorInit = () => {
     nextTick(() => {
         for (let i of editorThemes.value)
@@ -76,7 +120,7 @@ const editorInit = () => {
                 theme: 'tomorrow',
                 automaticLayout: true,
                 readOnly: false,
-                fontSize: 16,
+                fontSize: 14,
             })
         }
         else {
@@ -89,6 +133,7 @@ const editorInit = () => {
 
         editor.onDidChangeModelContent((val) => {
             updateIframe()
+
         })
 
         updateIframe()
@@ -103,10 +148,7 @@ watch(() => nowTheme.value, (v) => {
 
 editorInit()
 
-let combineDirection = ref("horizontal")
-let tabPosition = ref("top")
-let isDragging = ref(false)
-
+// Add overlay on the iframe when dragging
 function handleOnDragStart() {
     isDragging.value = true
 }
@@ -114,37 +156,20 @@ function handleOnDragEnd() {
     isDragging.value = false
 }
 
-// pinia Store
-import { useStore } from '@/states'
-const store = useStore()
-
-if (localStorage && localStorage.u5tcname)
-    store.username = localStorage.u5tcname
-
-const route = useRoute()
-const roomId = ref(route.params.id)
-const userInfo = ref({
-    username: store.username
-})
-const roomInfo = ref({
-    rid: route.params.id,
-    share: null,
-    members: [],
-    code: "",
-})
-
-// Socket.io
-import { io } from "socket.io-client"
-
-const connected = ref(false)
-let socket
-
-// Message Queue
-const popMessage = useMessage()
-const messages = ref([])
-const messageBox = ref()
-const chatMessage = ref("")
-const memberMap = {}
+function updateEditorStatus(d) {
+    if (d === socket.id || d === null) {
+        editor.updateOptions({
+            readOnly: false
+        })
+    }
+    else {
+        editor.updateOptions({
+            readOnly: true
+        })
+    }
+    lastCodeVersion.value = 0
+    lastSendCode.value = ""
+}
 
 onMounted(() => {
     socket = io("http://127.0.0.1:3000")
@@ -154,6 +179,14 @@ onMounted(() => {
         socket.emit("update_room", roomId.value, userInfo.value)
     })
     socket.on("disconnect", () => {
+        lastSendCode.value = ""
+        lastCodeVersion.value = 0
+        roomInfo.value = {
+            rid: route.params.id,
+            share: null,
+            members: [],
+            code: "",
+        }
         connected.value = false
     })
     // Initialize room info
@@ -161,6 +194,21 @@ onMounted(() => {
         roomInfo.value = data
         for (let i of roomInfo.value.members)
             memberMap[i.id] = i
+        updateEditorStatus(roomInfo.value.share)
+    })
+    socket.on("update-share", data => {
+        if (data) {
+            const u = memberMap[data].username
+            popMessage.info(`${u}开始分享代码`)
+            messages.value.push({ t: 's', c: `${u}开始分享代码` })
+        }
+        else {
+            const u = memberMap[roomInfo.value.share].username
+            popMessage.info(`${u}结束分享代码`)
+            messages.value.push({ t: 's', c: `${u}结束分享代码` })
+        }
+        roomInfo.value.share = data
+        updateEditorStatus(data)
     })
     // Room member info update
     socket.on("update-member", data => {
@@ -195,19 +243,49 @@ onMounted(() => {
         d.u = memberMap[d.i].username
         messages.value.push(d)
     })
+    // System Notification
+    socket.on("notification", (d) => {
+        popMessage[d.t](d.c)
+    })
 })
 
-function sendMessage() {
-    if (chatMessage.value.length === 0) {
-        popMessage.error("消息内容不能为空")
+function startShare() {
+    if (connected.value) {
+        socket.emit("update-share")
+    }
+    else {
+        popMessage.error("暂未连接到后端，无法分享")
         return
     }
-    socket.emit("chat", chatMessage.value)
-    chatMessage.value = ""
+}
+
+function endShare() {
+    if (connected.value) {
+        socket.emit("end-share")
+    }
+    else {
+        popMessage.error("暂未连接到后端，无法分享")
+        return
+    }
+}
+
+function sendMessage() {
+    if (connected.value) {
+        if (chatMessage.value.length === 0) {
+            popMessage.error("消息内容不能为空")
+            return
+        }
+        socket.emit("chat", chatMessage.value)
+        chatMessage.value = ""
+    }
+    else {
+        popMessage.error("暂未连接到后端，无法发送")
+        return
+    }
 }
 
 watch(() => messages.value.length, () => {
-    messageBox.value.scrollTo({ top: 2100000 })
+    messageBox?.value?.scrollTo({ top: 2100000 })
 })
 
 onBeforeUnmount(() => {
@@ -218,15 +296,15 @@ onBeforeUnmount(() => {
 
 <template>
     <div class="status-bar">
-        <n-popover trigger="hover">
-            <template #trigger>
-                <div class="ball" :class="{ red: !connected, green: connected }"></div>
-            </template>
-            <span>
-                <template v-if="connected">已连接</template>
-                <template v-else>未连接</template>
-            </span>
-        </n-popover>
+        <div class="ball" :class="{ red: !connected, green: connected }"></div>
+        <span class="info">
+            <template v-if="!connected">未连接</template>
+            <template v-else-if="roomInfo.share">{{ memberMap[roomInfo.share].username }}的代码</template>
+            <template v-else>无人分享</template>
+        </span>
+        <n-button strong secondary size="tiny" v-if="connected && !roomInfo.share" type="error" @click="startShare">我要分享</n-button>
+        <n-button strong secondary size="tiny" v-if="connected && roomInfo.share === userInfo.id" type="success"
+            @click="endShare">结束分享</n-button>
     </div>
     <n-split :direction="combineDirection" @drag-start="handleOnDragStart" @drag-end="handleOnDragEnd" style="height: 100vh"
         :min="0.25" :max="0.75">
@@ -240,12 +318,12 @@ onBeforeUnmount(() => {
             </div>
         </template>
     </n-split>
-    <n-popover style="max-height: 60vh; height: 400px; width: 300px; padding: 0;" trigger="click"
-        content-style="height: 100%;">
+    <n-popover style="max-height: 60vh; height: 400px; width: 300px; padding: 0;" trigger="manual"
+        content-style="height: 100%;" :show="settingsShow">
         <template #trigger>
-            <n-button size="large" circle class="command-button">
+            <n-button size="large" circle class="command-button" @click="settingsShow = !settingsShow">
                 <template #icon>
-                    <n-icon><menu-sharp /></n-icon>
+                    <n-icon><close-outline v-if="settingsShow" /><menu-sharp v-else /></n-icon>
                 </template>
             </n-button>
         </template>
@@ -382,26 +460,6 @@ onBeforeUnmount(() => {
 
 .n-card {
     margin-top: 10px;
-}
-
-.status-bar {
-    position: fixed;
-    bottom: 10px;
-    right: 10px;
-}
-
-.ball {
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-}
-
-.ball.red {
-    background-color: #db2828;
-}
-
-.ball.green {
-    background-color: #47af50;
 }
 
 .command-button {

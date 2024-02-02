@@ -90,3 +90,32 @@ body {
 .v-message .left {
     margin-right: 10px;
 }
+
+.status-bar {
+    display: flex;
+    position: fixed;
+    top: 10px;
+    right: 10px;
+    z-index: 23;
+}
+
+.ball {
+    width: 8px;
+    height: 8px;
+    margin: auto;
+    border-radius: 50%;
+}
+
+.ball.red {
+    background-color: #db2828;
+}
+
+.ball.green {
+    background-color: #47af50;
+}
+
+.status-bar span.info {
+    font-size: 12px;
+    line-height: 12px;
+    margin: auto 4px
+}
