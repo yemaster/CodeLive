@@ -16,15 +16,24 @@ const chatQueueMaxLength = 30
 const appName = "Codelive"
 const appVersion = "0.0.1"
 
-import { join } from 'path'
+const { join } = require("path")
 
 // Create Fastify and set Static Directory
-import fastify from 'fastify'
+const fastify = require('fastify')
 const app = fastify({
     logger: false,
 })
 
-import socketio from 'fastify-socket.io'
+app.register(require('@fastify/static'), {
+    root: join(__dirname, 'dist'),
+    prefix: '/'
+})
+
+app.get('/room/:id', (req, rep) => {
+    rep.sendFile("index.html")
+})
+
+const socketio = require('fastify-socket.io')
 app.register(socketio, {
     cors: true,
     options: {
@@ -125,6 +134,13 @@ app.listen({ port, host }, (err, add) => {
                 roomList[rid].members.push(t)
                 socket.emit("init-room", roomList[rid])
                 app.io.to(`Room-${rid}`).emit("update-member", t)
+                if (roomList[rid].share) {
+                    socket.emit("init-code", {
+                        c: roomCode[rid],
+                        v: roomCodeVersion[rid],
+                        r: roomCodeReserve[rid],
+                    })
+                }
             }
             else {
                 for (let i in uinfo) {

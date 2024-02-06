@@ -242,7 +242,11 @@ function updateEditorStatus(d) {
 }
 
 onMounted(() => {
-    socket = io("http://127.0.0.1:3000")
+    if (process.env.NODE_ENV === "development") {
+        socket = io("http://127.0.0.1:3000")
+    } else {
+        socket = io()
+    }
     socket.on("connect", () => {
         connected.value = true
         userInfo.value.id = socket.id
@@ -265,6 +269,12 @@ onMounted(() => {
         for (let i of roomInfo.value.members)
             memberMap[i.id] = i
         updateEditorStatus(roomInfo.value.share)
+    })
+    socket.on("init-code", data => {
+        lastCodeVersion.value = data.v
+        codeContent.value = data.c
+        editor.setValue(codeContent.value)
+        rCodeReserve = data.r
     })
     socket.on("update-share", data => {
         if (data) {
