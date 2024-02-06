@@ -47,11 +47,50 @@ function startPage() {
     console.log("----------------------")
 }
 
-// Record Each Room Info
+// Store Each Room Info
 let roomList = {}
-// Record Each players' room
+// Store Each players' room
 let playerRoom = {}
+// Store Each Room Code
+let roomCode = {}
+let roomCodeVersion = {}
+let roomCodeReserve = {}
 
+let updateLock = {}
+
+function updateRoomCode(rid) {
+    if (updateLock[rid])
+        return
+    updateLock[rid] = true
+    let nowVersion = roomCodeVersion[rid]
+    let p = roomCodeReserve[rid].findIndex(v => v.v === nowVersion + 1)
+    let codeSlice = roomCode[rid].split("\n")
+    while (p !== -1) {
+        let codeDiff = roomCodeReserve[rid][p].d
+        let addCount = 0, deleteCount = 0
+        codeDiff.forEach(i => {
+            // Add a Line
+            if (i.t === 'a') {
+                codeSlice.splice(i.p, 0, i.c)
+                addCount++
+            }
+            // Delete a Line
+            else {
+                codeSlice.splice(i.p - deleteCount + addCount, 1)
+                deleteCount++
+            }
+            //console.log(i)
+            //console.log(codeSlice)
+        })
+        roomCodeVersion[rid]++
+        nowVersion = roomCodeVersion[rid]
+        roomCodeReserve[rid].splice(p, 1)
+        p = roomCodeReserve[rid].findIndex(v => { v.v === nowVersion + 1 })
+    }
+    roomCode[rid] = codeSlice.join("\n")
+    delete updateLock[rid]
+    //console.log(roomCodeVersion[rid], roomCode[rid])
+}
 
 app.listen({ port, host }, (err, add) => {
     if (err) {
@@ -103,13 +142,33 @@ app.listen({ port, host }, (err, add) => {
             }
             roomList[rid].share = socket.id
             app.io.to(`Room-${rid}`).emit("update-share", socket.id)
+            roomCode[rid] = ""
+            roomCodeVersion[rid] = 0
+            roomCodeReserve[rid] = []
         })
 
         socket.on("end-share", () => {
             const rid = playerRoom[socket.id]
+            delete roomCode[rid]
+            delete roomCodeVersion[rid]
+            delete roomCodeReserve[rid]
             if (roomList[rid].share === socket.id) {
                 app.io.to(`Room-${rid}`).emit("update-share", null)
                 roomList[rid].share = null
+            }
+            else {
+                socket.emit("notification", { t: "error", c: "你并没有在分享代码" })
+            }
+        })
+
+        socket.on("update-code", (data) => {
+            const rid = playerRoom[socket.id]
+            if (roomList[rid].share === socket.id) {
+                //console.log(data)
+                app.io.to(`Room-${rid}`).emit("update-code", data)
+                roomCodeReserve[rid].push(data)
+                updateRoomCode(rid)
+
             }
             else {
                 socket.emit("notification", { t: "error", c: "你并没有在分享代码" })

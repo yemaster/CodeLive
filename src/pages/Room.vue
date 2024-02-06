@@ -29,6 +29,7 @@ const codeContent = ref(`<!DOCTYPE html>
 </html>`)
 const lastCodeVersion = ref(0)
 const lastSendCode = ref("")
+let rCodeReserve = []
 
 // Socket.io
 import { io } from "socket.io-client"
@@ -39,7 +40,7 @@ let socket
 // Monaco-Editor Instance
 let editor
 // Monaco-Editor Themes
-//import { tomorrow, tomorrowNight, textmate } from "@/assets/editor-themes"
+//import { tomorrow, tomorrowNight, textmate } from "@/libs/editor-themes"
 const nowTheme = ref("vs")
 //const editorThemes = ref([{ label: "tomorrow", value: "tomorrow", v: tomorrow },
 //{ label: "tomorrow-night", value: "tomorrow-night", v: tomorrowNight },
@@ -79,6 +80,9 @@ const messageBox = ref()
 const chatMessage = ref("")
 const memberMap = {}
 
+//// Patience Diff
+import { patienceDiff } from '@/libs/PatienceDiff'
+
 // monaco-editor worker getter
 self.MonacoEnvironment = {
     getWorker(_, label) {
@@ -107,6 +111,65 @@ function updateIframe() {
     }
 }
 
+// Calculate How to send code
+function calcSendCode() {
+    //console.log("Last Code Version:", lastCodeVersion.value)
+    const diff = patienceDiff(lastSendCode.value.split("\n"), codeContent.value.split("\n"))
+    let diffLines = []
+    diff.lines.forEach(o => {
+        if (o.aIndex < 0)
+            diffLines.push({ t: "a", c: o.line, p: o.bIndex })
+        else if (o.bIndex < 0)
+            diffLines.push({ t: "d", p: o.aIndex })
+    })
+    lastCodeVersion.value++
+    lastSendCode.value = codeContent.value
+    socket.emit("update-code", { d: diffLines, v: lastCodeVersion.value })
+}
+
+// Receive Send Code
+let updateLock = false
+function updateCode() {
+    if (updateLock)
+        return
+    updateLock = true
+    let nowVersion = lastCodeVersion.value
+    let p = rCodeReserve.findIndex(v => v.v === nowVersion + 1)
+    let codeSlice = codeContent.value.split("\n")
+    while (p !== -1) {
+        let codeDiff = rCodeReserve[p].d
+        //console.log(rCodeReserve[p])
+        let addCount = 0, deleteCount = 0
+        codeDiff.forEach(i => {
+            // Add a Line
+            if (i.t === 'a') {
+                codeSlice.splice(i.p, 0, i.c)
+                addCount++
+            }
+            // Delete a Line
+            else {
+                //console.log(i.p - deleteCount + addCount)
+                codeSlice.splice(i.p - deleteCount + addCount, 1)
+                deleteCount++
+            }
+            //console.log(i)
+            //console.log(codeSlice)
+        })
+        lastCodeVersion.value++
+        nowVersion = lastCodeVersion.value
+        rCodeReserve.splice(p, 1)
+        p = rCodeReserve.findIndex(v => { v.v === nowVersion + 1 })
+    }
+    codeContent.value = codeSlice.join("\n")
+    editor.setValue(codeContent.value)
+    updateLock = false
+}
+
+function receiveSendCode(d) {
+    rCodeReserve.push(d)
+    updateCode()
+}
+
 // Init editor
 const editorInit = () => {
     nextTick(() => {
@@ -131,9 +194,12 @@ const editorInit = () => {
             })
         }
 
-        editor.onDidChangeModelContent((val) => {
+        editor.onDidChangeModelContent(val => {
             updateIframe()
-
+            //console.log(connected.value, roomInfo.value.share, socket.id,  roomInfo.value.share === socket.id)
+            if (connected.value && roomInfo.value.share === socket.id) {
+                calcSendCode()
+            }
         })
 
         updateIframe()
@@ -167,8 +233,12 @@ function updateEditorStatus(d) {
             readOnly: true
         })
     }
-    lastCodeVersion.value = 0
-    lastSendCode.value = ""
+    if (d !== socket.id && d) {
+        codeContent.value = ""
+        editor.setValue("")
+        rCodeReserve = []
+        lastCodeVersion.value = 0
+    }
 }
 
 onMounted(() => {
@@ -237,6 +307,12 @@ onMounted(() => {
         roomInfo.value.members = roomInfo.value.members.filter(v => v.id !== data)
     })
 
+    // Update Code
+    socket.on("update-code", data => {
+        if (roomInfo.value.share !== socket.id)
+            receiveSendCode(data)
+    })
+
     // Chat Message
     socket.on("chat", (d) => {
         d.t = "m"
@@ -257,6 +333,9 @@ function startShare() {
         popMessage.error("暂未连接到后端，无法分享")
         return
     }
+    lastCodeVersion.value = 0
+    lastSendCode.value = ""
+    calcSendCode()
 }
 
 function endShare() {
@@ -271,10 +350,6 @@ function endShare() {
 
 function sendMessage() {
     if (connected.value) {
-        if (chatMessage.value.length === 0) {
-            popMessage.error("消息内容不能为空")
-            return
-        }
         socket.emit("chat", chatMessage.value)
         chatMessage.value = ""
     }
@@ -299,10 +374,12 @@ onBeforeUnmount(() => {
         <div class="ball" :class="{ red: !connected, green: connected }"></div>
         <span class="info">
             <template v-if="!connected">未连接</template>
-            <template v-else-if="roomInfo.share">{{ memberMap[roomInfo.share].username }}的代码</template>
+            <template v-else-if="roomInfo.share">{{ memberMap[roomInfo.share].username }}的代码(共{{ roomInfo.members.length
+            }}人观看)</template>
             <template v-else>无人分享</template>
         </span>
-        <n-button strong secondary size="tiny" v-if="connected && !roomInfo.share" type="error" @click="startShare">我要分享</n-button>
+        <n-button strong secondary size="tiny" v-if="connected && !roomInfo.share" type="error"
+            @click="startShare">我要分享</n-button>
         <n-button strong secondary size="tiny" v-if="connected && roomInfo.share === userInfo.id" type="success"
             @click="endShare">结束分享</n-button>
     </div>
